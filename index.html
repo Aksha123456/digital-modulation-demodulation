@@ -1,0 +1,134 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Parameters
+fc = 10    # Carrier frequency for ASK, PSK, QPSK, QAM
+fs = 1000  # Sampling frequency
+Tb = 1     # Bit duration
+t = np.linspace(0, Tb, int(fs*Tb), endpoint=False)
+f1 = 5     # FSK frequency for bit 0
+f2 = 15    # FSK frequency for bit 1
+
+print("Simple Digital Modulator and Demodulator")
+print("Enter bit sequences like: 10101")
+print("Press Ctrl+C to stop")
+
+while True:
+    bit_input = input("\nEnter bits: ")
+    bit_seq = [int(b) for b in bit_input if b in ['0', '1']]  # Clean input
+    
+    if len(bit_seq) < 2:
+        print("Please enter at least 2 bits for proper modulation.")
+        continue
+
+    # ----- ASK Modulation -----
+    ask_signal = np.array([])
+    for bit in bit_seq:
+        carrier = np.cos(2*np.pi*fc*t)
+        if bit == 1:
+            ask_signal = np.concatenate((ask_signal, carrier))
+        else:
+            ask_signal = np.concatenate((ask_signal, 0*carrier))
+    
+    # ASK Demodulation
+    received_ask = []
+    for i in range(0, len(ask_signal), len(t)):
+        segment = ask_signal[i:i+len(t)]
+        avg_power = np.mean(segment**2)
+        received_ask.append(1 if avg_power > 0.1 else 0)
+    
+    # ----- FSK Modulation -----
+    fsk_signal = np.array([])
+    for bit in bit_seq:
+        if bit == 1:
+            carrier = np.cos(2*np.pi*f2*t)
+        else:
+            carrier = np.cos(2*np.pi*f1*t)
+        fsk_signal = np.concatenate((fsk_signal, carrier))
+    
+    # FSK Demodulation
+    received_fsk = []
+    for i in range(0, len(fsk_signal), len(t)):
+        segment = fsk_signal[i:i+len(t)]
+        energy_f1 = np.sum(np.cos(2*np.pi*f1*t) * segment)
+        energy_f2 = np.sum(np.cos(2*np.pi*f2*t) * segment)
+        received_fsk.append(1 if energy_f2 > energy_f1 else 0)
+    
+    # ----- PSK Modulation -----
+    psk_signal = np.array([])
+    for bit in bit_seq:
+        carrier = np.cos(2*np.pi*fc*t + np.pi*bit)
+        psk_signal = np.concatenate((psk_signal, carrier))
+    
+    # PSK Demodulation
+    received_psk = []
+    for i in range(0, len(psk_signal), len(t)):
+        segment = psk_signal[i:i+len(t)]
+        corr = np.sum(np.cos(2*np.pi*fc*t) * segment)
+        received_psk.append(0 if corr > 0 else 1)
+    
+    # ----- QPSK Modulation -----
+    bit_pairs = [(bit_seq[i], bit_seq[i+1]) for i in range(0, len(bit_seq)-1, 2)]
+    qpsk_signal = np.array([])
+    for b1, b2 in bit_pairs:
+        phase = (2*b1 + b2) * np.pi/2
+        carrier = np.cos(2*np.pi*fc*t + phase)
+        qpsk_signal = np.concatenate((qpsk_signal, carrier))
+    
+    # QPSK Demodulation
+    received_qpsk = []
+    for i in range(0, len(qpsk_signal), len(t)):
+        segment = qpsk_signal[i:i+len(t)]
+        corr_cos = np.sum(np.cos(2*np.pi*fc*t) * segment)
+        corr_sin = np.sum(np.sin(2*np.pi*fc*t) * segment)
+        phase = np.arctan2(corr_sin, corr_cos)
+        phase = (phase + 2*np.pi) % (2*np.pi)
+        idx = int(round(phase/(np.pi/2))) % 4
+        bits = [idx//2, idx%2]
+        received_qpsk.extend(bits)
+    
+    # ----- QAM Modulation -----
+    qam_signal = np.array([])
+    for b1, b2 in bit_pairs:
+        I = 1 if b1 == 1 else -1
+        Q = 1 if b2 == 1 else -1
+        carrier = I*np.cos(2*np.pi*fc*t) + Q*np.sin(2*np.pi*fc*t)
+        qam_signal = np.concatenate((qam_signal, carrier))
+    
+    # QAM Demodulation
+    received_qam = []
+    for i in range(0, len(qam_signal), len(t)):
+        segment = qam_signal[i:i+len(t)]
+        I_comp = np.sum(np.cos(2*np.pi*fc*t) * segment)
+        Q_comp = np.sum(np.sin(2*np.pi*fc*t) * segment)
+        b1 = 1 if I_comp > 0 else 0
+        b2 = 1 if Q_comp > 0 else 0
+        received_qam.extend([b1, b2])
+    
+    # ----- Print results -----
+    print("\nOriginal bits        :", bit_seq)
+    print("ASK Demodulated bits  :", received_ask)
+    print("FSK Demodulated bits  :", received_fsk)
+    print("PSK Demodulated bits  :", received_psk)
+    print("QPSK Demodulated bits :", received_qpsk)
+    print("QAM Demodulated bits  :", received_qam)
+
+    # Optional plotting
+    plt.figure(figsize=(12,8))
+    plt.subplot(5,1,1)
+    plt.plot(ask_signal)
+    plt.title('ASK Signal')
+    plt.subplot(5,1,2)
+    plt.plot(fsk_signal)
+    plt.title('FSK Signal')
+    plt.subplot(5,1,3)
+    plt.plot(psk_signal)
+    plt.title('PSK Signal')
+    plt.subplot(5,1,4)
+    plt.plot(qpsk_signal)
+    plt.title('QPSK Signal')
+    plt.subplot(5,1,5)
+    plt.plot(qam_signal)
+    plt.title('QAM Signal')
+    plt.tight_layout()
+    plt.show()
